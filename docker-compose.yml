@@ -1,0 +1,32 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: trip
+      POSTGRES_PASSWORD: trip
+      POSTGRES_DB: trip
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trip"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - trip-data:/var/lib/postgresql/data
+  api:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://trip:trip@db:5432/trip
+      DATA_MODE: demo
+      CORS_ORIGINS: http://localhost:5173
+    ports: ["8000:8000"]
+    depends_on:
+      db:
+        condition: service_healthy
+  web:
+    build: ./frontend
+    environment:
+      VITE_API_URL: http://localhost:8000
+    ports: ["5173:5173"]
+    depends_on: [api]
+volumes:
+  trip-data:
