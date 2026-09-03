@@ -1,0 +1,2 @@
+import type { TripRequirements } from "../../types/trip";
+export function TripSummary({ trip }: { trip: TripRequirements }) { return <section className="summary"><div><b>Destination</b><span>{trip.destination}</span></div><div><b>Dates</b><span>{trip.start_date} · {trip.duration_days} days</span></div><div><b>Travellers</b><span>{trip.travelers}</span></div><div><b>Budget</b><span>₹{trip.budget.toLocaleString("en-IN")}</span></div></section>; }

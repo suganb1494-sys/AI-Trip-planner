@@ -76,3 +76,9 @@ pytest
 ```
 
 The tests cover extraction, missing dates, budget arithmetic, itinerary day count, persistence, and follow-up changes.
+
+## Modular layout
+
+The frontend is organized into reusable `components/` (chat, trip, itinerary, budget, weather, and maps), `pages/`, typed `services/`, `hooks/`, `types/`, and `utils/`. The working local-first dashboard remains in `frontend/src/main.jsx` while the TypeScript component layer is ready for incremental use.
+
+The backend separates `api/`, `agents/`, normalized `tools/`, provider `services/`, `rag/`, `budget/`, `itinerary/`, `database/repositories/`, and `core/` responsibilities. Project-level RAG data, database assets, and Docker files live in `data/`, `database/`, and `docker/`.

@@ -11,6 +11,18 @@ import {
   Menu,
   MessageCircle,
   X,
+  Home,
+  Hotel,
+  Utensils,
+  CloudSun,
+  Map,
+  Settings,
+  Search,
+  Bell,
+  WalletCards,
+  Luggage,
+  CircleDollarSign,
+  ArrowRight,
 } from "lucide-react";
 import "./index.css";
 
@@ -276,6 +288,18 @@ function demoTrip(request) {
           data_type: "estimated",
         },
       ],
+      attractions: attractions.map(([name, location, price]) => ({
+        name,
+        location,
+        price,
+        data_type: "estimated",
+      })),
+      restaurants: destination.restaurants.map(([name, price]) => ({
+        name,
+        location: destination.name,
+        price,
+        data_type: "estimated",
+      })),
       rag_context: [destination.context],
       request,
     },
@@ -298,15 +322,18 @@ function Badge({ value }) {
 }
 
 function App() {
-  const [input, setInput] = useState(
-    "Plan a 5-day trip to Dubai for 2 people from Chennai under ₹1,50,000, starting 15 October 2026.",
-  );
-  const [trip, setTrip] = useState(null);
+  const defaultRequest = "Plan a 5-day trip to Dubai for 2 people from Chennai under ₹1,50,000, starting 15 October 2026.";
+  const initialRoute = window.location.hash.replace("#", "") || "dashboard";
+  const [input, setInput] = useState(defaultRequest);
+  // Hash routes survive a browser refresh. Seed a local demo trip so a direct
+  // URL such as /#flights has content immediately instead of a blank screen.
+  const [trip, setTrip] = useState(() => demoTrip(defaultRequest));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [chatInput, setChatInput] = useState("");
-  const [chatOpen, setChatOpen] = useState(true);
+  const [chatOpen, setChatOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [activeView, setActiveView] = useState(initialRoute === "trips" ? "dashboard" : initialRoute);
   const [messages, setMessages] = useState([
     {
       role: "assistant",
@@ -345,12 +372,13 @@ function App() {
     // The POC is local-first: show the complete result immediately.
     const localPlan = demoTrip(message);
     setTrip(localPlan);
+    setActiveView("dashboard");
     setInput("");
     setChatInput("");
     setLoading(false);
     requestAnimationFrame(() => {
-      window.history.replaceState(null, "", "#itinerary");
-      document.getElementById("itinerary")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      window.history.replaceState(null, "", "#dashboard");
+      document.getElementById("trip-output")?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   }
 
@@ -372,50 +400,61 @@ function App() {
     }
     document.getElementById("planner")?.scrollIntoView({ behavior: "smooth", block: "center" });
   };
+  const selectView = (view) => (event) => {
+    event.preventDefault();
+    if (view === "chat") { setChatOpen(true); return; }
+    const currentTrip = trip || demoTrip(input);
+    if (!trip) setTrip(currentTrip);
+    setActiveView(view === "trips" ? "dashboard" : view);
+    window.history.replaceState(null, "", `#${view}`);
+    // A short delay ensures the plan DOM exists before scrolling on the first click.
+    setTimeout(() => document.getElementById("trip-output")?.scrollIntoView({ behavior: "smooth", block: "start" }), 40);
+  };
 
   return (
-    <main className="mx-auto max-w-[1240px] px-5 font-sans text-[#1b2b28] md:px-7">
+    <main className="app-shell mx-auto max-w-[1240px] px-5 font-sans text-[#1b2b28] md:px-7">
       <nav className="site-nav">
-        <div className="site-brand">
-          <Sparkles className="text-[#d66e41]" size={22} /> Roamwise
+        <div className="site-brand brand-ref">
+          <Luggage size={29} /> <div>AI Trip Planner<small>Your intelligent travel companion</small></div>
         </div>
-        <div className="site-links">
-          <a className="nav-link" href="#planner" onClick={goTo("planner")}>Planner</a>
-          <a className="nav-link" href="#itinerary" onClick={goTo("itinerary")}>Itinerary</a>
-          <a className="nav-link" href="#chat" onClick={(event) => { event.preventDefault(); setChatOpen(true); }}>Help</a>
-          <span>AI trip planner <b className="ml-1 rounded-full border border-stone-300 px-2 py-1">POC</b></span>
+        <div className="top-search"><Search size={18} /><span>Ask anything about your trip...</span><Sparkles size={17} /></div>
+        <div className="top-actions">
+          <CloudSun size={22} /><span><b>{requirements?.destination || "Dubai"}, UAE</b><small>32°C · Sunny</small></span><Bell size={19} /><div className="avatar">RK</div>
         </div>
         <button className="menu-button" onClick={() => setMenuOpen(!menuOpen)} aria-label="Toggle navigation">{menuOpen ? <X /> : <Menu />}</button>
         {menuOpen && <div className="mobile-nav"><a href="#planner" onClick={(event) => { setMenuOpen(false); goTo("planner")(event); }}>Planner</a><a href="#itinerary" onClick={(event) => { setMenuOpen(false); goTo("itinerary")(event); }}>Itinerary</a><a href="#chat" onClick={(event) => { event.preventDefault(); setMenuOpen(false); setChatOpen(true); }}>Help</a></div>}
       </nav>
+      <aside className="dashboard-sidebar" aria-label="Trip dashboard navigation">
+        <a className={`side-item ${activeView === "dashboard" ? "active" : ""}`} href="#dashboard" onClick={selectView("dashboard")}><Home size={18} /> Dashboard</a>
+        <a className={`side-item ${activeView === "chat" ? "active" : ""}`} href="#chat" onClick={selectView("chat")}><MessageCircle size={18} /> Chat Planner</a>
+        <a className={`side-item ${activeView === "itinerary" ? "active" : ""}`} href="#itinerary" onClick={selectView("itinerary")}><CalendarDays size={18} /> Itinerary</a>
+        <a className={`side-item ${activeView === "flights" ? "active" : ""}`} href="#flights" onClick={selectView("flights")}><Plane size={18} /> Flights</a>
+        <a className={`side-item ${activeView === "hotels" ? "active" : ""}`} href="#hotels" onClick={selectView("hotels")}><Hotel size={18} /> Hotels</a>
+        <a className={`side-item ${activeView === "attractions" ? "active" : ""}`} href="#attractions" onClick={selectView("attractions")}><MapPin size={18} /> Attractions</a>
+        <a className={`side-item ${activeView === "restaurants" ? "active" : ""}`} href="#restaurants" onClick={selectView("restaurants")}><Utensils size={18} /> Restaurants</a>
+        <a className={`side-item ${activeView === "weather" ? "active" : ""}`} href="#weather" onClick={selectView("weather")}><CloudSun size={18} /> Weather</a>
+        <a className={`side-item ${activeView === "map" ? "active" : ""}`} href="#map" onClick={selectView("map")}><Map size={18} /> Map View</a>
+        <a className={`side-item ${activeView === "budget" ? "active" : ""}`} href="#budget" onClick={selectView("budget")}><CircleDollarSign size={18} /> Budget</a>
+        <a className={`side-item ${activeView === "trips" ? "active" : ""}`} href="#trips" onClick={selectView("trips")}><Luggage size={18} /> My Trips</a>
+        <a className="side-item" href="#planner" onClick={goTo("planner")}><Settings size={18} /> Settings</a>
+        <div className="upgrade-card"><div className="upgrade-skyline">✦</div><b>Upgrade to Premium</b><p>Get access to exclusive deals, priority support & more.</p><button>Upgrade Now</button></div>
+      </aside>
 
-      <section className="pb-8 pt-16 text-center md:pt-20">
-        <p className="mb-3 text-[11px] font-bold tracking-[.15em] text-[#b55d37]">
-          DESIGNED AROUND YOUR BUDGET
-        </p>
-        <h1 className="text-4xl font-bold leading-[1.06] tracking-[-.04em] text-[#153f36] md:text-[54px]">
-          From a sentence to a<br />
-          <em className="font-display text-[#c7643c]">thoughtful journey.</em>
-        </h1>
-        <p className="mx-auto mt-5 max-w-xl leading-7 text-stone-500">
-          Tell us where, when, and how you like to travel. We’ll build a
-          practical itinerary with transparent estimates.
-        </p>
+      <section className="hero-panel pb-8 pt-16 text-center md:pt-20">
+        <h1>Plan your perfect trip with AI <Sparkles size={23} /></h1>
+        <p>Tell us your preferences and we'll create<br/>the perfect itinerary for you.</p>
+        <div className="hero-landmark">✦</div>
       </section>
 
-      <section id="planner" className="mx-auto mb-14 flex max-w-3xl flex-col rounded-[18px] border border-stone-300 bg-white p-2.5 shadow-[0_16px_50px_rgba(23,58,46,0.08)] md:flex-row md:items-end">
-        <textarea
-          className="min-h-[78px] flex-1 resize-none border-0 p-4 leading-6 outline-0"
-          value={input}
-          onChange={(event) => updateRequest(event.target.value)}
-          placeholder={trip ? "Ask for a change…" : "Describe your trip…"}
-        />
+      <section id="planner" className="planner-card mx-auto mb-14 flex max-w-3xl flex-col rounded-[18px] border border-stone-300 bg-white p-2.5 shadow-[0_16px_50px_rgba(23,58,46,0.08)] md:flex-row md:items-end">
+        <div className="planner-query"><textarea className="min-h-[58px] flex-1 resize-none border-0 p-3 leading-6 outline-0" value={input} onChange={(event) => updateRequest(event.target.value)} placeholder={trip ? "Ask for a change…" : "Describe your trip…"} />
+        <div className="trip-chips"><span><CalendarDays size={15} /> {requirements?.duration_days || parseRequest(input).days} Days</span><span><Users size={15} /> {requirements?.travelers || parseRequest(input).travelers} Travelers</span><span><MapPin size={15} /> {requirements?.destination || parseRequest(input).destinationName}</span><span><IndianRupee size={15} /> {money(requirements?.budget || parseRequest(input).budget)}</span></div></div>
         <button
           className="flex items-center justify-center gap-2 rounded-xl bg-[#174a3e] px-5 py-3.5 font-bold text-white disabled:opacity-50"
-          onClick={submit}
+          onClick={() => submit(input)}
           disabled={loading || !input.trim()}
         >
-          {loading ? "Planning…" : trip ? "Update trip" : "Plan my trip"}{" "}
+          {loading ? "Planning…" : "Generate Plan"}{" "}
           <Send size={17} />
         </button>
       </section>
@@ -439,7 +478,8 @@ function App() {
       )}
 
       {plan && (
-        <div id="trip-output">
+        <div id="trip-output" className={`dashboard-content data-view-${activeView}`}>
+          <div className="section-heading"><span><Luggage size={20} /> Your Trip Overview</span><a href="#itinerary" onClick={goTo("itinerary")}>View Full Itinerary <ArrowRight size={16} /></a></div>
           <section className="mb-6 grid overflow-hidden rounded-[18px] bg-[#173f36] text-white sm:grid-cols-2 lg:grid-cols-4">
             {[
               [MapPin, "DESTINATION", requirements.destination],
@@ -466,7 +506,7 @@ function App() {
             ))}
           </section>
 
-          <div className="grid gap-6 lg:grid-cols-[1.65fr_1fr]">
+          <div className="dashboard-grid grid gap-6 lg:grid-cols-[1.65fr_1fr]">
             <section id="itinerary" className={`${panel} itinerary`}>
               <div className="flex items-start justify-between">
                 <div>
@@ -514,8 +554,8 @@ function App() {
               ))}
             </section>
 
-            <aside>
-              <section className={panel}>
+            <aside className="right-rail">
+              <section id="budget" className={panel}>
                 <p className="mb-2 text-[11px] font-bold tracking-[.15em] text-[#b55d37]">
                   COST OVERVIEW
                 </p>
@@ -549,14 +589,14 @@ function App() {
                   <b>₹{money(Math.abs(plan.budget.remaining))}</b>
                 </div>
               </section>
-              <section className={panel}>
+              <section id="flights" className={panel}>
                 <p className="mb-2 text-[11px] font-bold tracking-[.15em] text-[#b55d37]">
                   RECOMMENDED
                 </p>
                 <h2 className="mb-5 flex items-center gap-2 text-2xl font-bold text-[#173f36]">
                   <Plane size={20} /> Travel picks
                 </h2>
-                {[plan.flights[0], plan.hotels[0]].map((item) => (
+                {plan.flights.map((item) => (
                   <div
                     className="flex justify-between gap-3 border-t border-stone-100 py-4"
                     key={item.name}
@@ -574,12 +614,28 @@ function App() {
                   </div>
                 ))}
               </section>
+              <section id="hotels" className={panel}>
+                <p className="mb-2 text-[11px] font-bold tracking-[.15em] text-[#b55d37]">STAY OPTIONS</p>
+                <h2 className="mb-5 flex items-center gap-2 text-2xl font-bold text-[#173f36]"><Hotel size={20} /> Hotel details</h2>
+                {plan.hotels.map((item) => <div className="flex justify-between gap-3 border-t border-stone-100 py-4" key={item.name}><div className="flex flex-col gap-1"><b>{item.name}</b><span className="text-xs text-stone-500">{item.location} · ★ {item.rating}</span></div><div className="flex flex-col items-end gap-2"><b>₹{money(item.price)}</b><Badge value={item.data_type} /></div></div>)}
+              </section>
+              <section id="attractions" className={panel}><p className="mb-2 text-[11px] font-bold tracking-[.15em] text-[#b55d37]">PLACES TO VISIT</p><h2 className="mb-5 text-2xl font-bold text-[#173f36]">Attractions</h2>{plan.attractions.map((item) => <p className="border-t border-stone-100 py-3 text-sm" key={item.name}><b>{item.name}</b><br/><span className="text-stone-500">{item.location} · ₹{money(item.price)}</span></p>)}</section>
+              <section id="restaurants" className={panel}><p className="mb-2 text-[11px] font-bold tracking-[.15em] text-[#b55d37]">DINING</p><h2 className="mb-5 text-2xl font-bold text-[#173f36]">Restaurants</h2>{plan.restaurants.map((item) => <p className="border-t border-stone-100 py-3 text-sm" key={item.name}><b>{item.name}</b><br/><span className="text-stone-500">{item.location} · ₹{money(item.price)}</span></p>)}</section>
               <section className={`${panel} bg-[#e6eee9]`}>
                 <Badge value="cached" />
                 <p className="mt-3 text-sm leading-6">{plan.rag_context[0]}</p>
               </section>
+              <section id="weather" className={`${panel} weather-widget`}>
+                <p className="mb-2 text-[11px] font-bold tracking-[.15em] text-[#2563eb]">CURRENT WEATHER</p>
+                <div className="weather-main"><CloudSun size={45} /><div><b>32°C</b><span>Sunny<br/>{requirements.destination}, UAE</span></div></div>
+                <div className="weather-stats"><span>Feels like<br/><b>35°C</b></span><span>Humidity<br/><b>45%</b></span><span>Wind<br/><b>18 km/h</b></span></div>
+              </section>
+              <section id="map" className={`${panel} map-widget`}>
+                <div className="flex justify-between"><b>Map Overview</b><a href="#map">View Full Map <ArrowRight size={14} /></a></div><div className="map-placeholder"><span className="map-pin one">●</span><span className="map-pin two">●</span><span className="map-pin three">●</span><b>{requirements.destination} route</b></div>
+              </section>
             </aside>
           </div>
+          <section className="benefit-row"><div><Sparkles/> <span><b>AI-Powered</b><small>Smart recommendations just for you</small></span></div><div><WalletCards/> <span><b>Trusted & Safe</b><small>Verified partners & secure data</small></span></div><div><CloudSun/> <span><b>Real-time Info</b><small>Live prices, weather & availability</small></span></div><div><MessageCircle/> <span><b>24/7 Support</b><small>We're here to help anytime</small></span></div></section>
         </div>
       )}
       <footer className="py-9 text-center text-xs text-stone-500">
