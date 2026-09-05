@@ -334,25 +334,115 @@ function App() {
   const [chatOpen, setChatOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeView, setActiveView] = useState(initialRoute === "trips" ? "dashboard" : initialRoute);
+  const [chatStep, setChatStep] = useState("destination");
+  const [chatDraft, setChatDraft] = useState({
+    destination: "",
+    days: 5,
+    travelers: 2,
+    budget: 150000,
+    departure: "Your city",
+  });
   const [messages, setMessages] = useState([
     {
       role: "assistant",
-      text: "Hi! I’m the help assistant. I can explain how to use the planner, itinerary, budget, and navigation.",
+      text: "Hello! I’m Trip Planner AI. Where would you like to travel?",
     },
   ]);
 
   function helpReply(question) {
     const text = question.toLowerCase();
-    if (text.includes("plan") || text.includes("trip")) return "Use the main Plan my trip box to enter your destination, dates, travellers, and budget. Click Plan my trip to see the output directly.";
+    if (text.includes("plan") || text.includes("trip")) return "Tell me the destination, number of days, travellers, departure city, budget, and start date. I’ll generate the complete trip details here.";
     if (text.includes("budget")) return "The Budget card breaks down estimated flights, hotel, food, activities, transport, and other costs. It also shows the remaining amount.";
     if (text.includes("itinerary") || text.includes("day")) return "The itinerary is generated after you click Plan my trip. Use the Update trip button in the main planner to revise destination, duration, or traveller count.";
     return "I can help you use this app. Ask about planning a trip, updating an itinerary, or reading the budget.";
   }
 
+  function addChatReply(question, reply) {
+    setMessages((history) => [
+      ...history,
+      { role: "user", text: question },
+      { role: "assistant", text: reply },
+    ]);
+  }
+
+  function readableDate(value) {
+    const namedDate = value.match(/(\d{1,2})\s+([A-Za-z]+)\s+(20\d{2})/);
+    if (namedDate) return `${namedDate[1]} ${namedDate[2]} ${namedDate[3]}`;
+    const isoDate = value.match(/(20\d{2})-(\d{1,2})-(\d{1,2})/);
+    if (!isoDate) return "";
+    const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    return `${Number(isoDate[3])} ${months[Number(isoDate[2]) - 1]} ${isoDate[1]}`;
+  }
+
+  function createChatPlan(draft, startDate, question) {
+    const request = `Plan a ${draft.days}-day trip to ${draft.destination} for ${draft.travelers} people from ${draft.departure} under ₹${draft.budget.toLocaleString("en-IN")}, starting ${startDate}.`;
+    const localPlan = demoTrip(request);
+    const details = localPlan.requirements;
+    setTrip(localPlan);
+    setInput(request);
+    setActiveView("dashboard");
+    setChatStep("complete");
+    addChatReply(question, `Excellent! Your ${details.destination} trip is ready: ${details.duration_days} days for ${details.travelers} travellers, starting ${details.start_date}, with a ₹${money(details.budget)} budget. Your itinerary, flights, hotels, and budget details are now available on the dashboard.`);
+    window.history.replaceState(null, "", "#dashboard");
+    setTimeout(() => document.getElementById("trip-output")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+  }
+
   function sendHelp() {
     const question = chatInput.trim();
     if (!question) return;
-    setMessages((history) => [...history, { role: "user", text: question }, { role: "assistant", text: helpReply(question) }]);
+
+    if (chatStep === "destination") {
+      // A complete opening request can skip directly to the final date question.
+      const isDetailedRequest = /\bto\s+[A-Za-z]/i.test(question) && /\b(plan|trip|days?|people|travellers?|travelers?|budget|₹|inr|rs\.?)/i.test(question);
+      if (isDetailedRequest) {
+        const parsed = parseRequest(question);
+        const draft = { destination: parsed.destinationName, days: parsed.days, travelers: parsed.travelers, budget: parsed.budget, departure: parsed.departure };
+        setChatDraft(draft);
+        setChatStep("date");
+        addChatReply(question, `Perfect! I have your ${draft.destination} trip for ${draft.days} days with a ₹${money(draft.budget)} budget for ${draft.travelers} travellers. What is your travel start date? Example: 15 October 2026.`);
+      } else {
+        const destination = question.replace(/^(?:i want to travel to|travel to|to)\s+/i, "").trim();
+        setChatDraft((draft) => ({ ...draft, destination }));
+        setChatStep("days");
+        addChatReply(question, `Great choice! How many days would you like to spend in ${destination}?`);
+      }
+    } else if (chatStep === "days") {
+      const days = Number(question.match(/\d+/)?.[0]);
+      if (!Number.isFinite(days) || days < 1 || days > 30) addChatReply(question, "Please enter the number of travel days, for example: 5 days.");
+      else {
+        setChatDraft((draft) => ({ ...draft, days }));
+        setChatStep("travelers");
+        addChatReply(question, "How many travellers are going on this trip?");
+      }
+    } else if (chatStep === "travelers") {
+      const travelers = Number(question.match(/\d+/)?.[0]);
+      if (!Number.isFinite(travelers) || travelers < 1 || travelers > 20) addChatReply(question, "Please enter the number of travellers, for example: 2 people.");
+      else {
+        setChatDraft((draft) => ({ ...draft, travelers }));
+        setChatStep("budget");
+        addChatReply(question, "What is your total trip budget in Indian rupees? Example: ₹1,50,000.");
+      }
+    } else if (chatStep === "budget") {
+      const budgetText = question.match(/(?:₹|inr|rs\.?)\s*([\d,]+)/i)?.[1] || question.match(/[\d,]+/)?.[0];
+      const budget = Number(budgetText?.replaceAll(",", ""));
+      if (!Number.isFinite(budget) || budget < 1000) addChatReply(question, "Please enter a budget such as ₹1,50,000.");
+      else {
+        setChatDraft((draft) => ({ ...draft, budget }));
+        setChatStep("departure");
+        addChatReply(question, "Which city will you be travelling from?");
+      }
+    } else if (chatStep === "departure") {
+      const departure = question.replace(/^from\s+/i, "").trim();
+      setChatDraft((draft) => ({ ...draft, departure }));
+      setChatStep("date");
+      addChatReply(question, "What is your travel start date? Example: 15 October 2026.");
+    } else if (chatStep === "date") {
+      const startDate = readableDate(question);
+      if (!startDate) addChatReply(question, "Please enter the date as 15 October 2026 or 2026-10-15.");
+      else createChatPlan(chatDraft, startDate, question);
+    } else {
+      addChatReply(question, "Your trip is already ready. Start a new chat by refreshing the page, or update the main planner box.");
+    }
     setChatInput("");
   }
 
@@ -642,15 +732,15 @@ function App() {
         Estimates are planning aids, not booking quotes. Confirm live prices and
         availability with providers.
       </footer>
-      <button className={`chat-toggle ${chatOpen ? "hidden" : ""}`} onClick={() => setChatOpen(true)} aria-label="Open help"><MessageCircle size={19} /> Help</button>
+      <button className={`chat-toggle ${chatOpen ? "hidden" : ""}`} onClick={() => setChatOpen(true)} aria-label="Open trip planner chat"><MessageCircle size={19} /> Chat Planner</button>
       <aside id="chat" className={`chat-drawer ${chatOpen ? "open" : ""}`} aria-label="AI assistant">
-        <div className="chat-drawer-header"><div><p>ROAMWISE HELP</p><b>How can I help?</b></div><button onClick={() => setChatOpen(false)} aria-label="Close chat"><X size={18} /></button></div>
+        <div className="chat-drawer-header"><div><p>TRIP PLANNER AI</p><b>Plan your trip</b></div><button onClick={() => setChatOpen(false)} aria-label="Close chat"><X size={18} /></button></div>
         <div className="chat-history" aria-live="polite">
           {messages.map((message, index) => <p className={`chat-message ${message.role}`} key={`${message.role}-${index}`}>{message.text}</p>)}
         </div>
         <div className="chat-composer">
-          <input className="chat-input" value={chatInput} onChange={(event) => setChatInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") sendHelp(); }} placeholder="Ask how to use the app…" />
-          <button className="chat-send" onClick={sendHelp} disabled={!chatInput.trim()} aria-label="Send help message"><Send size={16} /></button>
+          <input className="chat-input" value={chatInput} onChange={(event) => setChatInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") sendHelp(); }} placeholder="Describe your trip…" />
+          <button className="chat-send" onClick={sendHelp} disabled={!chatInput.trim()} aria-label="Send trip request"><Send size={16} /></button>
         </div>
       </aside>
     </main>
